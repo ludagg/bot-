@@ -1,0 +1,27 @@
+{
+  "name": "whatsapp-bot-baileys",
+  "version": "1.0.0",
+  "description": "Bot WhatsApp avec Baileys et interface web pour scanner le QR code",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "keywords": [
+    "whatsapp",
+    "bot",
+    "baileys",
+    "chatbot",
+    "automation"
+  ],
+  "author": "Votre nom",
+  "license": "MIT",
+  "dependencies": {
+    "@whiskeysockets/baileys": "^6.7.8",
+    "express": "^4.18.2",
+    "pino": "^8.16.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
