@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="fr">
 <head>
@@ -226,7 +225,6 @@
             }
         }
     </style>
-    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
 </head>
 <body>
     <div class="container">
@@ -269,6 +267,9 @@
         </div>
     </div>
 
+    <!-- Charger QRCode depuis un CDN fiable -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    
     <script>
         let lastQR = null;
         let checkCount = 0;
@@ -322,26 +323,30 @@
                     if (data.qr !== lastQR) {
                         lastQR = data.qr;
                         qrcodeDiv.innerHTML = '';
-                        addDebugLog('Génération du QR code...');
+                        addDebugLog('Génération du QR code avec QRCode.js...');
                         
-                        QRCode.toCanvas(data.qr, { 
-                            width: 256, 
-                            margin: 2,
-                            color: {
-                                dark: '#000000',
-                                light: '#ffffff'
-                            }
-                        }, (error, canvas) => {
-                            if (error) {
-                                console.error('Erreur QR:', error);
-                                addDebugLog('❌ Erreur génération QR: ' + error.message);
-                                qrcodeDiv.innerHTML = '<p style="color: #dc3545;">❌ Erreur lors de la génération du QR code</p>';
-                            } else {
-                                qrcodeDiv.innerHTML = '';
-                                qrcodeDiv.appendChild(canvas);
-                                addDebugLog('✅ QR Code généré et affiché!');
-                            }
-                        });
+                        try {
+                            // Créer un div pour le QR code
+                            const qrDiv = document.createElement('div');
+                            qrDiv.id = 'qr-generated';
+                            qrcodeDiv.appendChild(qrDiv);
+                            
+                            // Générer le QR code avec QRCode.js
+                            new QRCode(qrDiv, {
+                                text: data.qr,
+                                width: 256,
+                                height: 256,
+                                colorDark: "#000000",
+                                colorLight: "#ffffff",
+                                correctLevel: QRCode.CorrectLevel.H
+                            });
+                            
+                            addDebugLog('✅ QR Code généré et affiché!');
+                        } catch (error) {
+                            console.error('Erreur QR:', error);
+                            addDebugLog('❌ Erreur génération QR: ' + error.message);
+                            qrcodeDiv.innerHTML = '<p style="color: #dc3545;">❌ Erreur lors de la génération du QR code</p>';
+                        }
                     }
                 } else {
                     statusDiv.className = 'status connecting';
@@ -380,9 +385,26 @@
             checkQRCode();
         }
 
-        // Vérifier le QR code au chargement
-        addDebugLog('🚀 Page chargée, démarrage...');
-        checkQRCode();
+        // Attendre que QRCode soit chargé
+        window.addEventListener('load', () => {
+            addDebugLog('🚀 Page chargée, démarrage...');
+            
+            // Vérifier que QRCode est disponible
+            if (typeof QRCode !== 'undefined') {
+                addDebugLog('✅ Bibliothèque QRCode chargée');
+                checkQRCode();
+            } else {
+                addDebugLog('❌ Bibliothèque QRCode non chargée!');
+                setTimeout(() => {
+                    if (typeof QRCode !== 'undefined') {
+                        addDebugLog('✅ QRCode disponible après délai');
+                        checkQRCode();
+                    } else {
+                        addDebugLog('❌ QRCode toujours non disponible');
+                    }
+                }, 1000);
+            }
+        });
 
         // Vérifier automatiquement toutes les 5 secondes
         setInterval(checkQRCode, 5000);
