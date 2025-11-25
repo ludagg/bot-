@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="fr">
 <head>
@@ -163,6 +164,23 @@
             transform: translateY(0);
         }
 
+        .debug-console {
+            background: #1e1e1e;
+            color: #00ff00;
+            padding: 15px;
+            border-radius: 10px;
+            margin-top: 20px;
+            text-align: left;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .debug-console .log {
+            margin: 5px 0;
+        }
+
         .footer {
             margin-top: 30px;
             color: #999;
@@ -214,7 +232,7 @@
     <div class="container">
         <h1>🤖 Bot WhatsApp</h1>
         <p class="subtitle">Connexion avec Baileys</p>
-
+        
         <div id="status" class="status connecting">
             Chargement...
         </div>
@@ -241,6 +259,11 @@
             </ol>
         </div>
 
+        <!-- Console de debug -->
+        <div class="debug-console" id="debugConsole">
+            <div class="log">🔍 Console de debug...</div>
+        </div>
+
         <div class="footer">
             🔄 Mis à jour automatiquement toutes les 5 secondes
         </div>
@@ -248,11 +271,32 @@
 
     <script>
         let lastQR = null;
+        let checkCount = 0;
+
+        function addDebugLog(message) {
+            const console = document.getElementById('debugConsole');
+            const log = document.createElement('div');
+            log.className = 'log';
+            log.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            console.appendChild(log);
+            console.scrollTop = console.scrollHeight;
+            
+            // Garder seulement les 20 derniers logs
+            while (console.children.length > 20) {
+                console.removeChild(console.firstChild);
+            }
+        }
 
         async function checkQRCode() {
+            checkCount++;
+            addDebugLog(`Vérification #${checkCount}...`);
+            
             try {
                 const response = await fetch('/api/qr');
+                addDebugLog(`Réponse API reçue: ${response.status}`);
+                
                 const data = await response.json();
+                addDebugLog(`Données: Connected=${data.connected}, HasQR=${data.hasQR}`);
                 
                 const statusDiv = document.getElementById('status');
                 const qrcodeDiv = document.getElementById('qrcode');
@@ -268,14 +312,17 @@
                             <p>Votre bot WhatsApp est maintenant actif et prêt à répondre aux messages.</p>
                         </div>
                     `;
+                    addDebugLog('✅ Bot connecté avec succès!');
                 } else if (data.qr) {
                     statusDiv.className = 'status waiting';
                     statusDiv.textContent = '📱 ' + data.status;
+                    addDebugLog(`QR Code reçu (longueur: ${data.qr.length})`);
                     
                     // Générer le QR code seulement s'il a changé
                     if (data.qr !== lastQR) {
                         lastQR = data.qr;
                         qrcodeDiv.innerHTML = '';
+                        addDebugLog('Génération du QR code...');
                         
                         QRCode.toCanvas(data.qr, { 
                             width: 256, 
@@ -287,16 +334,19 @@
                         }, (error, canvas) => {
                             if (error) {
                                 console.error('Erreur QR:', error);
+                                addDebugLog('❌ Erreur génération QR: ' + error.message);
                                 qrcodeDiv.innerHTML = '<p style="color: #dc3545;">❌ Erreur lors de la génération du QR code</p>';
                             } else {
                                 qrcodeDiv.innerHTML = '';
                                 qrcodeDiv.appendChild(canvas);
+                                addDebugLog('✅ QR Code généré et affiché!');
                             }
                         });
                     }
                 } else {
                     statusDiv.className = 'status connecting';
                     statusDiv.textContent = '⏳ ' + data.status;
+                    addDebugLog('En attente du QR code...');
                     
                     if (!data.connected) {
                         qrcodeDiv.innerHTML = `
@@ -307,6 +357,8 @@
                 }
             } catch (error) {
                 console.error('Erreur de connexion:', error);
+                addDebugLog('❌ ERREUR: ' + error.message);
+                
                 const statusDiv = document.getElementById('status');
                 const qrcodeDiv = document.getElementById('qrcode');
                 
@@ -321,6 +373,7 @@
         }
 
         function refreshStatus() {
+            addDebugLog('🔄 Rafraîchissement manuel...');
             const statusDiv = document.getElementById('status');
             statusDiv.className = 'status connecting';
             statusDiv.textContent = '🔄 Actualisation...';
@@ -328,6 +381,7 @@
         }
 
         // Vérifier le QR code au chargement
+        addDebugLog('🚀 Page chargée, démarrage...');
         checkQRCode();
 
         // Vérifier automatiquement toutes les 5 secondes
@@ -336,7 +390,7 @@
         // Informer l'utilisateur si la page devient inactive
         document.addEventListener('visibilitychange', () => {
             if (!document.hidden) {
-                console.log('Page active - vérification du statut');
+                addDebugLog('👀 Page redevenue visible');
                 checkQRCode();
             }
         });
