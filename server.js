@@ -12,6 +12,17 @@ let isConnected = false;
 let connectionStatus = 'Démarrage...';
 let lastUpdate = new Date().toISOString();
 
+// IMPORTANT : Middleware CORS pour permettre les requêtes
+app.use((req, res, next) => {
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Content-Type');
+    next();
+});
+
+// Middleware pour parser JSON
+app.use(express.json());
+
 // Middleware pour les logs
 app.use((req, res, next) => {
     console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
@@ -21,20 +32,25 @@ app.use((req, res, next) => {
 // Servir les fichiers statiques
 app.use(express.static('public'));
 
-// API pour obtenir le QR code
+// API pour obtenir le QR code - VERSION SIMPLIFIÉE
 app.get('/api/qr', (req, res) => {
     console.log('📡 API /api/qr appelée');
     console.log('QR Data exists:', !!qrCodeData);
     console.log('Is Connected:', isConnected);
     console.log('Status:', connectionStatus);
     
-    res.json({
+    // Toujours renvoyer une réponse valide
+    const response = {
         qr: qrCodeData,
         connected: isConnected,
         status: connectionStatus,
         lastUpdate: lastUpdate,
-        hasQR: !!qrCodeData
-    });
+        hasQR: !!qrCodeData,
+        timestamp: new Date().toISOString()
+    };
+    
+    res.setHeader('Content-Type', 'application/json');
+    res.status(200).json(response);
 });
 
 // API pour obtenir le statut
@@ -53,7 +69,16 @@ app.get('/health', (req, res) => {
         status: 'ok', 
         uptime: process.uptime(),
         memory: process.memoryUsage(),
-        connected: isConnected
+        connected: isConnected,
+        hasQR: !!qrCodeData
+    });
+});
+
+// Test endpoint
+app.get('/api/test', (req, res) => {
+    res.json({ 
+        message: 'API fonctionne correctement!',
+        timestamp: new Date().toISOString()
     });
 });
 
@@ -62,12 +87,17 @@ app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
+// Gérer les erreurs 404
+app.use((req, res) => {
+    res.status(404).json({ error: 'Route non trouvée' });
+});
+
 // Démarrer le serveur Express
 const server = app.listen(PORT, '0.0.0.0', () => {
     console.log('=================================');
     console.log('🌐 Serveur web démarré');
     console.log(`📍 Port: ${PORT}`);
-    console.log(`🔗 URL locale: http://localhost:${PORT}`);
+    console.log(`🔗 URL: http://0.0.0.0:${PORT}`);
     console.log('=================================');
 });
 
@@ -86,7 +116,7 @@ async function connectToWhatsApp() {
         const sock = makeWASocket({
             version,
             auth: state,
-            printQRInTerminal: true, // On garde ça pour les logs aussi
+            printQRInTerminal: true,
             logger: pino({ level: 'silent' }),
             browser: ['Bot WhatsApp', 'Chrome', '1.0.0'],
             defaultQueryTimeoutMs: undefined
@@ -110,7 +140,7 @@ async function connectToWhatsApp() {
                 lastUpdate = new Date().toISOString();
                 console.log('📱 ✅ QR CODE GÉNÉRÉ ET DISPONIBLE !');
                 console.log('QR longueur:', qr.length);
-                console.log('QR preview:', qr.substring(0, 50) + '...');
+                console.log('QR début:', qr.substring(0, 50) + '...');
             }
             
             if(connection === 'close') {
@@ -292,14 +322,13 @@ async function connectToWhatsApp() {
         // Keep-alive
         setInterval(() => {
             console.log('💓 Bot actif -', new Date().toLocaleString('fr-FR'), '- Connected:', isConnected, '- Has QR:', !!qrCodeData);
-        }, 60000); // Toutes les minutes
+        }, 60000);
         
     } catch (error) {
         console.error('❌ Erreur lors de l\'initialisation du bot:', error);
         connectionStatus = 'Erreur: ' + error.message;
         lastUpdate = new Date().toISOString();
         
-        // Réessayer après 10 secondes
         setTimeout(() => {
             console.log('🔄 Nouvelle tentative de connexion...');
             connectToWhatsApp();
