@@ -5,16 +5,17 @@ services:
       POSTGRES_USER: sih
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sih}
       POSTGRES_DB: sih
-    ports: ["5432:5432"]
+    ports: ["127.0.0.1:5432:5432"]
     volumes: [pgdata:/var/lib/postgresql/data]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U sih"]
       interval: 5s
       retries: 10
+    restart: unless-stopped
 
   redis:
     image: redis:7
-    ports: ["6379:6379"]
+    restart: unless-stopped
 
   migrate:
     build: ./backend
@@ -23,14 +24,33 @@ services:
     depends_on:
       postgres: { condition: service_healthy }
 
-  hn-collector:
+  worker:
     build: ./backend
-    # Passage incrémental toutes les 10 min (le planificateur générique arrive en J2).
-    command: ["sh", "-c", "while true; do python -m sih.cli hn-collect; sleep 600; done"]
+    command: ["python", "-m", "sih.cli", "worker"]
     env_file: .env
     restart: unless-stopped
     depends_on:
       migrate: { condition: service_completed_successfully }
 
+  api:
+    build: ./backend
+    command: ["uvicorn", "sih.api:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers"]
+    env_file: .env
+    restart: unless-stopped
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+
+  caddy:
+    image: caddy:2
+    ports: ["80:80", "443:443"]
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+    environment:
+      API_DOMAIN: ${API_DOMAIN:-localhost}
+    depends_on: [api]
+    restart: unless-stopped
+
 volumes:
   pgdata:
+  caddy_data:

@@ -1,5 +1,6 @@
 """Briques communes des collecteurs : backoff, stockage idempotent, état de source."""
 import asyncio
+import time
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
@@ -29,13 +30,21 @@ async def get_json(
     url: str,
     params: dict[str, Any] | None = None,
     *,
+    headers: dict[str, str] | None = None,
     retries: int = 5,
     base_delay: float = 1.0,
 ) -> Any:
     """GET JSON avec backoff exponentiel sur 429/5xx et erreurs réseau."""
     for attempt in range(retries + 1):
         try:
-            resp = await client.get(url, params=params)
+            resp = await client.get(url, params=params, headers=headers)
+            if resp.status_code == 403 and resp.headers.get("x-ratelimit-remaining") == "0":
+                reset = int(resp.headers.get("x-ratelimit-reset", "0"))
+                wait = max(1.0, min(reset - time.time(), 90.0))
+                if attempt < retries:
+                    log.warning("rate_limited", url=url, wait=wait)
+                    await asyncio.sleep(wait)
+                    continue
             if resp.status_code not in RETRY_STATUS:
                 resp.raise_for_status()
                 return resp.json()
@@ -90,19 +99,34 @@ def store_events(conn: Connection, source_id: int, events: list[RawEvent]) -> in
     return created
 
 
-def mark_success(conn: Connection, source_id: int, cursor: dict | None = None) -> None:
+def mark_success(
+    conn: Connection,
+    source_id: int,
+    cursor: dict | None = None,
+    interval_minutes: int | None = None,
+    etag: str | None = None,
+    last_modified: str | None = None,
+) -> None:
     import json
 
     conn.execute(
         text(
             """
             UPDATE sources SET last_success_at = now(), error_count = 0,
-              next_fetch_at = now() + make_interval(mins => interval_minutes),
+              interval_minutes = COALESCE(:interval, interval_minutes),
+              etag = COALESCE(:etag, etag), last_modified = COALESCE(:lm, last_modified),
+              next_fetch_at = now() + make_interval(mins => COALESCE(:interval, interval_minutes)),
               cursor = COALESCE(CAST(:cursor AS jsonb), cursor)
             WHERE id = :id
             """
         ),
-        {"id": source_id, "cursor": json.dumps(cursor) if cursor else None},
+        {
+            "id": source_id,
+            "cursor": json.dumps(cursor) if cursor else None,
+            "interval": interval_minutes,
+            "etag": etag,
+            "lm": last_modified,
+        },
     )
 
 

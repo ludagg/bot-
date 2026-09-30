@@ -122,3 +122,17 @@ async def collect_latest(engine: Engine, **kw) -> int:
         else datetime.now(UTC) - timedelta(days=1)
     )
     return await collect(engine, source_id, since, **kw)
+
+
+async def collect_source(engine: Engine, source: dict, client: httpx.AsyncClient) -> int:
+    """Point d'entrée du planificateur (toutes les 10 min, curseur + chevauchement)."""
+    cur = source.get("cursor")
+    since = (
+        datetime.fromisoformat(cur["last_created_at"]) - OVERLAP
+        if cur
+        else datetime.now(UTC) - timedelta(days=1)
+    )
+    try:
+        return await collect(engine, source["id"], since, client=client)
+    except Exception:
+        return 0  # collect() a déjà journalisé et marqué l'échec
