@@ -1,0 +1,36 @@
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: sih
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sih}
+      POSTGRES_DB: sih
+    ports: ["5432:5432"]
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sih"]
+      interval: 5s
+      retries: 10
+
+  redis:
+    image: redis:7
+    ports: ["6379:6379"]
+
+  migrate:
+    build: ./backend
+    command: ["python", "-m", "sih.cli", "migrate"]
+    env_file: .env
+    depends_on:
+      postgres: { condition: service_healthy }
+
+  hn-collector:
+    build: ./backend
+    # Passage incrémental toutes les 10 min (le planificateur générique arrive en J2).
+    command: ["sh", "-c", "while true; do python -m sih.cli hn-collect; sleep 600; done"]
+    env_file: .env
+    restart: unless-stopped
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+
+volumes:
+  pgdata:
