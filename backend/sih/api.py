@@ -43,7 +43,7 @@ def _card(r) -> dict:
         "confidence": float(r.confidence),
         "status": r.status,
         "first_detected_at": r.first_detected_at.isoformat(),
-        "age_seconds": int((now - r.first_detected_at).total_seconds()),
+        "age_seconds": max(0, int((now - r.first_detected_at).total_seconds())),
         "headline": (r.explanation or {}).get("headline"),
         "content_hash": r.content_hash,
     }

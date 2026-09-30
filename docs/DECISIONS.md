@@ -12,3 +12,17 @@
 6. **Trigger supplémentaire.** En plus du journal en ajout seul, un trigger interdit toute modification de `detections.first_detected_at` (règle 6 du prompt).
 7. **Backoff de source.** À chaque échec : `next_fetch_at` repoussé de `intervalle × 2^erreurs` (plafond 24 h) ; désactivation après 10 échecs consécutifs (l'alerte Telegram arrive avec le monitoring).
 8. **Backfill HN.** Fenêtres de 6 h, scindées en deux si Algolia signale plus de 1000 résultats (limite dure de l'API).
+
+## Implémentation complète (hors découpage par jours)
+
+9. **Redis non utilisé en v0.** Le planificateur pose un bail en base (`UPDATE … FOR UPDATE SKIP LOCKED` sur `sources.next_fetch_at`) et collecte en `asyncio` dans un seul processus, avec limite de débit par domaine. Redis reste dans le compose pour la montée en charge (workers multiples, verrous par domaine).
+10. **GitHub : Search API uniquement.** Nouveaux dépôts des 2 derniers jours triés par étoiles (3 pages × 100), relus à chaque passage pour rafraîchir étoiles/forks. L'API Events n'est pas utilisée en v0.
+11. **Fenêtre et score.** Fenêtre courante = 6 buckets horaires (dont l'heure en cours). Base = 14 jours de buckets horaires avant la fenêtre, absents = 0. `z = 0.6745·(moyenne horaire courante − médiane)/max(MAD, 0.25)` ; attendu = `max(6·médiane, 1)` ; une communauté « bouge » si z ≥ 4, ≥ 5 mentions et ≥ 3× l'attendu. `peak_ratio` = hausse relative (6.38 = +638 %, comme l'exemple de la spec).
+12. **Confiance** = `0.2 × min(communautés, 4) + 0.2 × min(z, 20)/20`. 1 communauté = signal non stocké ; 2 = orange ; ≥ 3 = rouge.
+13. **Déduplication.** `detections.last_active_at` (ajouté) : tant qu'une détection non clôturée a été active il y a moins de 48 h, l'entité y reste rattachée ; clôture après 48 h de calme. `first_detected_at` = heure de l'analyse (`as_of`), jamais modifié.
+14. **Agrégation.** Additive par identifiant croissant (`kv_state.aggregate_last_id`), événements de moins de 30 s différés. Les événements de flux sans date prennent la date de première collecte.
+15. **Cold start.** La publication (site et X) ne concerne que les détections postérieures à `PUBLISH_MIN_HISTORY_DAYS` (7) après le premier compteur horaire.
+16. **X.** `X_MODE` = `off` (interrupteur), `review` (défaut : messages en file `x_outbox`, envoi par `sih x-approve <id>`), `auto`. Plafond 3 tweets/jour ; texte issu du gabarit fixe, entité réduite à `[a-z0-9 .+#/-]`. Le message UPDATE est mis en file quand l'explication est validée.
+17. **LLM.** Appel HTTP direct à l'API Messages (modèle économique configurable, `LLM_MODEL`), un appel par détection, 3 tentatives maximum, plafond `LLM_DAILY_CAP`, coût cumulé dans `llm_usage`. Tarifs codés en dur, à confirmer.
+18. **Purge.** Brut supprimé par `DELETE` après 31 jours, compteurs horaires après 60 jours (la base de référence en exige 14 à 30).
+19. **Front.** Rendu serveur avec `revalidate = 60` + rafraîchissement client toutes les 60 s ; image Open Graph par détection (`next/og`). La page « Legal » contient un emplacement à compléter (éditeur, contact, hébergeur).
