@@ -2,6 +2,7 @@ import Link from "next/link";
 import AutoRefresh from "@/components/AutoRefresh";
 import { ago, getCards } from "@/lib/api";
 
+export const dynamic = "force-dynamic"; // jamais pré-rendu au build : l API peut être injoignable
 export const revalidate = 60;
 
 export default async function Home() {

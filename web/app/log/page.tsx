@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getLog } from "@/lib/api";
 
+export const dynamic = "force-dynamic"; // jamais pré-rendu au build : l API peut être injoignable
 export const revalidate = 60;
 export const metadata = { title: "Log" };
 
