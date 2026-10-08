@@ -175,12 +175,12 @@ def test_worker_cycle_end_to_end(clean):
         n = 0
         for _c, sid in srcs.items():
             for i in range(14 * 24):  # base : 1 mention/h de « quantum »
-                conn.execute(text("INSERT INTO raw_events (source_id, external_id, title, published_at, collected_at) VALUES (:s,:e,'quantum news',:p,:p)"),
-                             {"s": sid, "e": f"b{n}", "p": now - timedelta(hours=7 + i)})
+                conn.execute(text("INSERT INTO raw_events (source_id, external_id, title, url, published_at, collected_at) VALUES (:s,:e,'quantum news',:u,:p,:p)"),
+                             {"s": sid, "e": f"b{n}", "u": f"https://{_c}.x/b{n}", "p": now - timedelta(hours=7 + i)})
                 n += 1
             for i in range(30):  # pic dans la fenêtre courante
-                conn.execute(text("INSERT INTO raw_events (source_id, external_id, title, published_at, collected_at) VALUES (:s,:e,'quantum leap',:p,:p)"),
-                             {"s": sid, "e": f"s{n}", "p": now - timedelta(hours=i % 5)})
+                conn.execute(text("INSERT INTO raw_events (source_id, external_id, title, url, published_at, collected_at) VALUES (:s,:e,'quantum leap',:u,:p,:p)"),
+                             {"s": sid, "e": f"s{n}", "u": f"https://{_c}.x/s{n}", "p": now - timedelta(hours=i % 5)})
                 n += 1
     s = settings()
     out = worker.analytics_cycle(clean, s, as_of=now + timedelta(minutes=10))

@@ -35,3 +35,10 @@
 23. **Résultat sur données réelles (3 jours, 40 flux RSS et HN).** Zéro détection : aucun pic ne dépasse la base de référence avec les seuils de la spec. C'est le comportement attendu, mais ça ne valide rien : il faut plusieurs semaines de collecte multi-communautés avant de régler les seuils.
 24. **Limite connue : mots génériques.** Des termes comme « work », « time », « life », « team » deviennent des entités. Ils ne déclenchent que s'ils montent nettement au-dessus de leur base, mais une liste de mots vides plus large (ou un filtre par fréquence) est à ajouter avant le lancement.
 25. **Limite connue : GitHub injoignable depuis ce conteneur** (403 sur l'API Search sans jeton). Le collecteur n'a donc pas été testé en réel.
+
+## Filtre du bruit
+
+26. **Une histoire compte une fois par communauté et par heure.** Un même article (URL sans paramètres de suivi, sinon titre normalisé) repris par plusieurs flux d'une communauté ne compte qu'une fois. Sur les données réelles, « ai » tombe de 72 à 36 mentions sur 6 h : les 36 restantes sont des histoires distinctes. Limite : un doublon arrivant dans un lot d'agrégation ultérieur peut être compté à nouveau.
+27. **Mots vides élargis.** Liste `GENERIC` (≈150 mots : « work », « time », « life », « team », « tech », « live »…). Les termes spécifiques (« nobel », « openai », « quantum ») ne sont pas touchés.
+28. **Seuil effectif sur base vide.** Avec une base à zéro, le plancher MAD (0,25) impose z ≥ 4, soit environ 9 histoires distinctes sur 6 h dans une communauté. Testé : 6 copies d'un même article ne déclenchent rien, 10 histoires distinctes déclenchent.
+29. **Résultat sur données réelles (3 jours).** Les candidats restants sont des sujets réels (« nobel prize », « ai agent », sites de presse), et aucun ne dépasse la base de référence : toujours zéro détection, ce qui reste la bonne réponse tant qu'il n'y a pas de pic.
