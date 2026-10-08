@@ -26,3 +26,12 @@
 17. **LLM.** Appel HTTP direct à l'API Messages (modèle économique configurable, `LLM_MODEL`), un appel par détection, 3 tentatives maximum, plafond `LLM_DAILY_CAP`, coût cumulé dans `llm_usage`. Tarifs codés en dur, à confirmer.
 18. **Purge.** Brut supprimé par `DELETE` après 31 jours, compteurs horaires après 60 jours (la base de référence en exige 14 à 30).
 19. **Front.** Rendu serveur avec `revalidate = 60` + rafraîchissement client toutes les 60 s ; image Open Graph par détection (`next/og`). La page « Legal » contient un emplacement à compléter (éditeur, contact, hébergeur).
+
+## Audit sur données réelles (collecte HN 30 j + 40 flux RSS)
+
+20. **Bug corrigé : curseur d'agrégation.** Le curseur sautait les lignes trop récentes (identifiants attribués avant le commit) : sur la collecte réelle, 6 000 événements n'étaient jamais comptés. Désormais l'agrégation s'arrête à la première ligne de moins de 30 s, et ne dépasse jamais une ligne non traitée. Test de régression ajouté.
+21. **Bug corrigé : vieux articles.** Les flux RSS renvoient parfois des articles de 2015. Ceux de plus de 31 jours sont stockés mais ne comptent plus comme activité.
+22. **Trigger confirmé en conditions réelles.** Un TRUNCATE sur `publication_log` est refusé, comme prévu.
+23. **Résultat sur données réelles (3 jours, 40 flux RSS et HN).** Zéro détection : aucun pic ne dépasse la base de référence avec les seuils de la spec. C'est le comportement attendu, mais ça ne valide rien : il faut plusieurs semaines de collecte multi-communautés avant de régler les seuils.
+24. **Limite connue : mots génériques.** Des termes comme « work », « time », « life », « team » deviennent des entités. Ils ne déclenchent que s'ils montent nettement au-dessus de leur base, mais une liste de mots vides plus large (ou un filtre par fréquence) est à ajouter avant le lancement.
+25. **Limite connue : GitHub injoignable depuis ce conteneur** (403 sur l'API Search sans jeton). Le collecteur n'a donc pas été testé en réel.

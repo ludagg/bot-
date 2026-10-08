@@ -1,6 +1,6 @@
 """Boucle principale : collecte → agrégation → détection → analyse → publication."""
 import asyncio
-from datetime import UTC, datetime
+from datetime import datetime
 
 import structlog
 from sqlalchemy import Engine, text

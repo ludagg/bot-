@@ -6,13 +6,7 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy import Connection, text
 
 STOPWORDS = frozenset(
-    """a about after all also an and any are as at be been but by can could did do does for from get got
-    had has have how i if in into is it its just like make may more most new no not of on one only or our
-    out over per re s so some than that the their them then there these they this to up us use used using
-    via was we were what when where which who why will with you your
-    show hn ask launch tell best top free now today first last
-    le la les un une des du de et en est pour que qui dans sur par avec ce cette ces au aux ne pas plus
-    """.split()
+    ["a", "about", "after", "all", "also", "an", "and", "any", "are", "as", "at", "be", "been", "but", "by", "can", "could", "did", "do", "does", "for", "from", "get", "got", "had", "has", "have", "how", "i", "if", "in", "into", "is", "it", "its", "just", "like", "make", "may", "more", "most", "new", "no", "not", "of", "on", "one", "only", "or", "our", "out", "over", "per", "re", "s", "so", "some", "than", "that", "the", "their", "them", "then", "there", "these", "they", "this", "to", "up", "us", "use", "used", "using", "via", "was", "we", "were", "what", "when", "where", "which", "who", "why", "will", "with", "you", "your", "show", "hn", "ask", "launch", "tell", "best", "top", "free", "now", "today", "first", "last", "le", "la", "les", "un", "une", "des", "du", "de", "et", "en", "est", "pour", "que", "qui", "dans", "sur", "par", "avec", "ce", "cette", "ces", "au", "aux", "ne", "pas", "plus"]
 )
 SHORT_OK = frozenset({"ai", "ml", "go", "js", "ts", "os", "c#", "vr", "ar"})
 ALIASES = {"gpt4": "gpt-4"}
@@ -56,7 +50,7 @@ def keywords(text_: str) -> set[str]:
         text_ = pat.sub(repl, text_)
     toks = tokens(text_)
     found: set[str] = {t for t in toks if t}
-    for a, b in zip(toks, toks[1:]):
+    for a, b in zip(toks, toks[1:], strict=False):
         if a and b:
             found.add(f"{a} {b}")
     return {ALIASES.get(k, k) for k in found}
@@ -93,6 +87,9 @@ def extract(source_type: str, title: str | None, url: str | None, domain: str | 
 
 WATERMARK_KEY = "aggregate_last_id"
 BATCH = 5000
+# Au-delà, un événement est stocké (historique) mais ne compte pas comme activité :
+# un vieil article de flux RSS ne doit pas gonfler une heure lointaine de la base de référence.
+MAX_AGE = timedelta(days=31)
 
 
 def _hour(ts: datetime) -> datetime:
@@ -102,8 +99,9 @@ def _hour(ts: datetime) -> datetime:
 def aggregate(conn: Connection, now: datetime | None = None) -> int:
     """Ajoute les nouveaux événements bruts à entity_hourly (par communauté, par heure).
 
-    Progresse par identifiant croissant ; les événements de moins de 30 s sont laissés au
-    passage suivant (transactions de collecte en cours). Renvoie le nombre d'événements traités.
+    Progresse par identifiant croissant et ne dépasse jamais un événement non traité ; les
+    événements de moins de 30 s sont laissés au passage suivant (transactions en cours).
+    Renvoie le nombre d'événements traités.
     """
     now = now or datetime.now(UTC)
     last_id = conn.execute(text("SELECT value FROM kv_state WHERE key = :k"), {"k": WATERMARK_KEY}).scalar()
@@ -115,20 +113,32 @@ def aggregate(conn: Connection, now: datetime | None = None) -> int:
                 """SELECT r.id, r.title, r.url, r.domain, r.body, r.published_at, r.collected_at,
                           s.community, s.type
                    FROM raw_events r JOIN sources s ON s.id = r.source_id
-                   WHERE r.id > :last AND r.collected_at <= :cutoff ORDER BY r.id LIMIT :n"""
+                   WHERE r.id > :last ORDER BY r.id LIMIT :n"""
             ),
-            {"last": last_id, "cutoff": now - timedelta(seconds=30), "n": BATCH},
+            {"last": last_id, "n": BATCH},
         ).all()
-        if not rows:
+        # S'arrêter à la première ligne trop récente : les identifiants sont attribués avant le
+        # commit, une ligne plus récente peut avoir un identifiant inférieur et serait sautée.
+        cutoff = now - timedelta(seconds=30)
+        eligible = []
+        for r in rows:
+            if r.collected_at > cutoff:
+                break
+            eligible.append(r)
+        if not eligible:
             break
         counts: Counter[tuple[str, str, str, datetime]] = Counter()
-        for r in rows:
+        for r in eligible:
+            if r.collected_at - r.published_at > MAX_AGE:
+                continue
             hour = _hour(min(r.published_at, r.collected_at))  # dates futures ramenées à la collecte
             for kind, name in extract(r.type, r.title, r.url, r.domain, r.body):
                 counts[(kind, name, r.community, hour)] += 1
         _flush(conn, counts)
-        last_id = rows[-1].id
-        processed += len(rows)
+        last_id = eligible[-1].id
+        processed += len(eligible)
+        if len(eligible) < len(rows):
+            break
     conn.execute(
         text("INSERT INTO kv_state (key, value) VALUES (:k, to_jsonb(CAST(:v AS bigint))) "
              "ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value"),

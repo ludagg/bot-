@@ -9,7 +9,13 @@ import httpx
 import structlog
 from sqlalchemy import Engine, text
 
-from sih.collectors.base import RawEvent, get_json, mark_failure, mark_success, store_events
+from sih.collectors.base import (
+    RawEvent,
+    get_json,
+    mark_failure,
+    mark_success,
+    store_events,
+)
 
 log = structlog.get_logger()
 

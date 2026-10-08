@@ -6,7 +6,7 @@ import respx
 from sqlalchemy import text
 
 from sih import scheduler
-from sih.collectors import github, hn, rss
+from sih.collectors import github, rss
 from sih.sources import import_sources
 
 FEED = b"""<?xml version="1.0"?><rss version="2.0"><channel><title>t</title>

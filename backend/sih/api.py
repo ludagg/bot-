@@ -70,8 +70,8 @@ def get_detection(detection_id: int, engine: Engine = Depends(get_engine)):
             text("SELECT channel, snapshot, content_hash, published_at FROM publication_log WHERE detection_id=:i ORDER BY id"),
             {"i": detection_id}).all()
     return {**_card(r), "explanation": r.explanation,
-            "log": [{"channel": l.channel, "snapshot": l.snapshot, "content_hash": l.content_hash,
-                     "published_at": l.published_at.isoformat()} for l in log_rows]}
+            "log": [{"channel": row.channel, "snapshot": row.snapshot, "content_hash": row.content_hash,
+                     "published_at": row.published_at.isoformat()} for row in log_rows]}
 
 
 @app.get("/api/detections/{detection_id}/series")

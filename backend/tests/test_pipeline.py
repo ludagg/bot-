@@ -50,7 +50,7 @@ def test_llm_output_validation_drops_uncited_timeline_points():
     exp = analysis.validate("```json\n" + json.dumps(GOOD) + "\n```", {"https://real.example/a"})
     assert [p.source_url for p in exp.timeline] == ["https://real.example/a"]
     assert exp.hypotheses == ["Hypothèse : une sortie de modèle"]
-    with pytest.raises(Exception):
+    with pytest.raises(ValueError):
         analysis.validate("pas du json", set())
 
 
@@ -120,9 +120,8 @@ def test_publish_journal_x_cap_update_and_immutability(clean):
     analysis.analyze_pending(clean, FakeLLM(GOOD), s)
     out = publish.publish_pending(clean, s)
     assert out["update"] >= 1 and out["x"] >= 1
-    with pytest.raises(DBAPIError):
-        with clean.begin() as conn:
-            conn.execute(text("UPDATE publication_log SET content_hash='x'"))
+    with pytest.raises(DBAPIError), clean.begin() as conn:
+        conn.execute(text("UPDATE publication_log SET content_hash='x'"))
 
 
 def test_x_kill_switch_and_review_mode(clean):
@@ -157,7 +156,7 @@ def test_api_endpoints(clean):
     assert cards[0]["id"] == did and cards[0]["level"] == "red" and cards[0]["change_pct"] == 638
     assert cards[0]["age_seconds"] > 3000 and cards[0]["content_hash"]
     d = c.get(f"/api/detections/{did}").json()
-    assert d["explanation"]["timeline"] and {l["snapshot"]["kind"] for l in d["log"]} == {"detection", "update"}
+    assert d["explanation"]["timeline"] and {x["snapshot"]["kind"] for x in d["log"]} == {"detection", "update"}
     ser = c.get(f"/api/detections/{did}/series").json()
     assert len(ser["hours"]) == 72 and sum(ser["series"]["ai"]) == 9
     assert c.get("/api/detections/9999").status_code == 404
@@ -174,7 +173,7 @@ def test_worker_cycle_end_to_end(clean):
         srcs = {c: conn.execute(text("INSERT INTO sources (type,url,community) VALUES ('rss',:u,:c) RETURNING id"),
                                 {"u": f"https://{c}.x/feed", "c": c}).scalar_one() for c in ("ai", "security", "oss")}
         n = 0
-        for c, sid in srcs.items():
+        for _c, sid in srcs.items():
             for i in range(14 * 24):  # base : 1 mention/h de « quantum »
                 conn.execute(text("INSERT INTO raw_events (source_id, external_id, title, published_at, collected_at) VALUES (:s,:e,'quantum news',:p,:p)"),
                              {"s": sid, "e": f"b{n}", "p": now - timedelta(hours=7 + i)})

@@ -5,7 +5,7 @@ comme instruction) ; toute affirmation de la timeline doit citer une URL de l'en
 """
 import json
 import re
-from datetime import UTC, datetime, timedelta
+from datetime import timedelta
 from typing import Protocol
 
 import httpx
